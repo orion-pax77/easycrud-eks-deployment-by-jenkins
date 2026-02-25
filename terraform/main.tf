@@ -1,51 +1,77 @@
+
+# Provider
+
 provider "aws" {
-    region = "us-east-1"
+  region = "us-east-1"
 }
+
+
+# Variables
+
+variable "db_password" {
+  description = "RDS database password"
+  type        = string
+  sensitive   = true
+}
+
+
+# Get Default VPC
+
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+
+# IAM Role for EKS Cluster
 
 resource "aws_iam_role" "eks_cluster_role" {
-    name = "eks-cluster-role"
+  name = "eks-cluster-role"
 
-    assume_role_policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-        {
-            Effect = "Allow"
-            Principal = {
-            Service = "eks.amazonaws.com"
-            }
-            Action = [
-            "sts:AssumeRole",
-            "sts:TagSession"
-            ]
-        }
-        ]
-    })
-    }
-
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-    role       = aws_iam_role.eks_cluster_role.name
-    policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "eks.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
 }
 
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  role       = aws_iam_role.eks_cluster_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+
+# EKS Cluster
+
 resource "aws_eks_cluster" "eks_cluster" {
-    name     = "example-eks-cluster"
-    role_arn = aws_iam_role.eks_cluster_role.arn
-    version  = "1.29"
+  name     = "example-eks-cluster"
+  role_arn = aws_iam_role.eks_cluster_role.arn
+  version  = "1.29"
 
-vpc_config {
-        subnet_ids = [
-        "subnet-0173c2a6d326a5894",
-        "subnet-0a8326480d6a7ae22"
-        ]
-    }
+  vpc_config {
+    subnet_ids = data.aws_subnets.default.ids
+  }
 
-    depends_on = [
-        aws_iam_role_policy_attachment.eks_cluster_policy
-    ]
-    }
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_cluster_policy
+  ]
+}
 
 
-resource "aws_iam_role" "eks_node_group_role" {
+# IAM Role for Node Group
+
+resource "aws_iam_role" "eks_node_role" {
   name = "eks-node-group-role"
 
   assume_role_policy = jsonencode({
@@ -60,61 +86,57 @@ resource "aws_iam_role" "eks_node_group_role" {
   })
 }
 
-# Essential policies for EKS worker nodes
-resource "aws_iam_role_policy_attachment" "node_AmazonEKSWorkerNodePolicy" {
+resource "aws_iam_role_policy_attachment" "node_worker_policy" {
+  role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.eks_node_group_role.name
 }
 
-resource "aws_iam_role_policy_attachment" "node_AmazonEKS_CNI_Policy" {
+resource "aws_iam_role_policy_attachment" "node_cni_policy" {
+  role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.eks_node_group_role.name
 }
 
-resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOnly" {
+resource "aws_iam_role_policy_attachment" "node_ecr_policy" {
+  role       = aws_iam_role.eks_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.eks_node_group_role.name
-}
-resource "aws_iam_role_policy_attachment" "node_AmazonEKSWorkerNodeMinimalPolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodeMinimalPolicy"
-  role       = aws_iam_role.eks_node_group_role.name
 }
 
 
-provider "aws" {
-  region = "us-east-1"
-}
+# EKS Managed Node Group
 
-###################################
-# Get Default VPC
-###################################
-data "aws_vpc" "default" {
-  default = true
-}
+resource "aws_eks_node_group" "example_nodes" {
+  cluster_name    = aws_eks_cluster.eks_cluster.name
+  node_group_name = "example-node-group"
+  node_role_arn   = aws_iam_role.eks_node_role.arn
+  subnet_ids      = data.aws_subnets.default.ids
 
-###################################
-# Get Subnets
-###################################
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+  scaling_config {
+    desired_size = 1
+    max_size     = 2
+    min_size     = 1
   }
+
+  instance_types = ["t3.medium"]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_worker_policy,
+    aws_iam_role_policy_attachment.node_cni_policy,
+    aws_iam_role_policy_attachment.node_ecr_policy
+  ]
 }
 
-###################################
+
 # Security Group for RDS
-###################################
+
 resource "aws_security_group" "rds_sg" {
-  name        = "rds-mariadb-sg"
-  description = "Allow MariaDB access"
-  vpc_id      = data.aws_vpc.default.id
+  name   = "rds-mariadb-sg"
+  vpc_id = data.aws_vpc.default.id
 
   ingress {
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]   # ⚠ For testing only
+    cidr_blocks = ["0.0.0.0/0"] # ⚠ Only for testing
   }
 
   egress {
@@ -125,52 +147,41 @@ resource "aws_security_group" "rds_sg" {
   }
 }
 
-###################################
+
 # DB Subnet Group
-###################################
+
 resource "aws_db_subnet_group" "rds_subnet" {
   name       = "rds-mariadb-subnet-group"
   subnet_ids = data.aws_subnets.default.ids
 }
 
-###################################
-# RDS MariaDB Instance (Free Tier)
-###################################
+# RDS MariaDB (Free Tier Safe)
+
 resource "aws_db_instance" "mariadb" {
-  identifier              = "easycrud-mariadb"
-  allocated_storage       = 20
-  max_allocated_storage   = 20
+  identifier            = "easycrud-mariadb"
+  allocated_storage     = 20
+  engine                = "mariadb"
+  engine_version        = "10.6"
+  instance_class        = "db.t3.micro"
+  db_name               = "easycruddb"
+  username              = "admin"
+  password              = var.db_password
 
-  engine                  = "mariadb"
-  engine_version          = "11.8.5"   # Free-tier supported stable version
+  db_subnet_group_name  = aws_db_subnet_group.rds_subnet.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
-  instance_class          = "db.t4g.micro"
-  storage_type            = "gp2"
-
-  db_name                 = "easycruddb"
-  username                = "admin"
-  password                = "redhat123"
-
-  db_subnet_group_name    = aws_db_subnet_group.rds_subnet.name
-  vpc_security_group_ids  = [aws_security_group.rds_sg.id]
-
-  publicly_accessible     = true
-  multi_az                = false
-  skip_final_snapshot     = true
-  deletion_protection     = false
-
-  backup_retention_period = 0
-  performance_insights_enabled = false
-  auto_minor_version_upgrade    = true
-
-  tags = {
-    Name = "EasyCRUD-MariaDB"
-  }
+  publicly_accessible   = true
+  skip_final_snapshot   = true
+  multi_az              = false
 }
 
-###################################
+
 # Outputs
-###################################
+
+output "eks_cluster_endpoint" {
+  value = aws_eks_cluster.eks_cluster.endpoint
+}
+
 output "rds_endpoint" {
   value = aws_db_instance.mariadb.address
 }
