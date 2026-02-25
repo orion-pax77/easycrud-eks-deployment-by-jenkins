@@ -161,11 +161,11 @@ resource "aws_db_instance" "mariadb" {
   identifier            = "easycrud-mariadb"
   allocated_storage     = 20
   engine                = "mariadb"
-  engine_version        = "10.6"
-  instance_class        = "db.t3.micro"
+  engine_version        = "11.8.5"
+  instance_class        = "db.tg4.micro"
   db_name               = "easycruddb"
   username              = "admin"
-  password              = var.db_password
+  password              = "redhat123"
 
   db_subnet_group_name  = aws_db_subnet_group.rds_subnet.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
