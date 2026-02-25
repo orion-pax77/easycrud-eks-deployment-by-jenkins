@@ -1,5 +1,5 @@
 provider "aws" {
-    region = "eu-north-1"
+    region = "us-east-1"
 }
 
 resource "aws_iam_role" "eks_cluster_role" {
