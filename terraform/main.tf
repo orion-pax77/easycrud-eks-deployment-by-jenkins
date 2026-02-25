@@ -6,15 +6,6 @@ provider "aws" {
 }
 
 
-# Variables
-
-variable "db_password" {
-  description = "RDS database password"
-  type        = string
-  sensitive   = true
-}
-
-
 # Get Default VPC
 
 data "aws_vpc" "default" {
