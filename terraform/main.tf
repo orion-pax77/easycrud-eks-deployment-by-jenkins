@@ -14,7 +14,7 @@ data "aws_vpc" "default" {
 
 data "aws_subnets" "default" {
   filter {
-    name   = "vpc-id"
+    name   = "default"
     values = [data.aws_vpc.default.id]
   }
 }
