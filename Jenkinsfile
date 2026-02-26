@@ -50,6 +50,48 @@ pipeline {
                 }
             }
         }
+        stage('Create MariaDB Database & Table') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'rds-creds',
+                    usernameVariable: 'DB_USER',
+                    passwordVariable: 'DB_PASS'
+                )]) {
+
+                    sh '''
+                        export MYSQL_PWD="$DB_PASS"
+
+                        mysql -h "$RDS_ENDPOINT" \
+                              -P "$DB_PORT" \
+                              -u "$DB_USER" <<EOF
+
+                        CREATE DATABASE IF NOT EXISTS student_db;
+
+                        CREATE USER IF NOT EXISTS 'admin'@'%' IDENTIFIED BY '$DB_PASS';
+
+                        GRANT ALL PRIVILEGES ON student_db.* TO 'admin'@'%';
+
+                        FLUSH PRIVILEGES;
+
+                        USE student_db;
+
+                        CREATE TABLE IF NOT EXISTS students (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            name VARCHAR(255) DEFAULT NULL,
+                            email VARCHAR(255) DEFAULT NULL,
+                            course VARCHAR(255) DEFAULT NULL,
+                            student_class VARCHAR(255) DEFAULT NULL,
+                            percentage DOUBLE DEFAULT NULL,
+                            branch VARCHAR(255) DEFAULT NULL,
+                            mobile_number VARCHAR(255) DEFAULT NULL,
+                            PRIMARY KEY (id)
+                        );
+
+EOF
+                    '''
+                }
+            }
+        }
 
         // ================= UPDATE application.properties =================
 
