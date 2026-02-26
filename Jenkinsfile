@@ -133,19 +133,25 @@ pipeline {
 
         // ================= DEPLOY BACKEND =================
 
-        stage('Deploy Backend to Kubernetes') {
-            steps {
-                sh """
-                    kubectl apply -f k8s/backend-deployment.yml
+       stage('Deploy Backend to Kubernetes') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds',
+            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
 
-                    kubectl set image deployment/backend-dep \
-                    backend=$DOCKER_BACKEND
+            sh """
+                export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                    kubectl rollout status deployment/backend-dep
-                """
-            }
+                kubectl apply -f k8s/backend-deployment.yml
+                kubectl set image deployment/backend-dep backend=$DOCKER_BACKEND
+                kubectl rollout status deployment/backend-dep
+            """
         }
-
+    }
+}
         // ================= DEPLOY FRONTEND =================
 
         stage('Deploy Frontend to Kubernetes') {
