@@ -50,48 +50,6 @@ pipeline {
                 }
             }
         }
-        stage('Create MariaDB Database & Table') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'rds-creds',
-                    usernameVariable: 'DB_USER',
-                    passwordVariable: 'DB_PASS'
-                )]) {
-
-                    sh '''
-                        export MYSQL_PWD="$DB_PASS"
-
-                        mysql -h "$RDS_ENDPOINT" \
-                              -P "$DB_PORT" \
-                              -u "$DB_USER" <<EOF
-
-                        CREATE DATABASE IF NOT EXISTS student_db;
-
-                        CREATE USER IF NOT EXISTS 'admin'@'%' IDENTIFIED BY '$DB_PASS';
-
-                        GRANT ALL PRIVILEGES ON student_db.* TO 'admin'@'%';
-
-                        FLUSH PRIVILEGES;
-
-                        USE student_db;
-
-                        CREATE TABLE IF NOT EXISTS students (
-                            id BIGINT NOT NULL AUTO_INCREMENT,
-                            name VARCHAR(255) DEFAULT NULL,
-                            email VARCHAR(255) DEFAULT NULL,
-                            course VARCHAR(255) DEFAULT NULL,
-                            student_class VARCHAR(255) DEFAULT NULL,
-                            percentage DOUBLE DEFAULT NULL,
-                            branch VARCHAR(255) DEFAULT NULL,
-                            mobile_number VARCHAR(255) DEFAULT NULL,
-                            PRIMARY KEY (id)
-                        );
-
-EOF
-                    '''
-                }
-            }
-        }
 
         // ================= UPDATE application.properties =================
 
@@ -108,7 +66,7 @@ EOF
             }
         }
 
-        // ================= BUILD BACKEND =================
+        // ================= BUILD & PUSH BACKEND =================
 
         stage('Build Backend Image') {
             steps {
@@ -136,7 +94,7 @@ EOF
 
         // ================= DEPLOY BACKEND =================
 
-        stage('Deploy Backend & Fetch LB') {
+        stage('Deploy Backend & Fetch LoadBalancer DNS') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -177,21 +135,34 @@ EOF
             }
         }
 
-        // ================= UPDATE FRONTEND .env =================
+        // ================= FRONTEND STEPS AS REQUESTED =================
 
-        stage('Update Frontend .env') {
+        stage('Navigate to Frontend Directory') {
             steps {
-                sh """
-                    sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
-                """
+                dir('EasyCRUD/frontend') {
+                    sh '''
+                        echo "Checking .env file..."
+                        ls -a
+                    '''
+                }
             }
         }
 
-        // ================= BUILD FRONTEND =================
+        stage('Update .env File with Backend LB URL') {
+            steps {
+                dir('EasyCRUD/frontend') {
+                    sh """
+                        sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' .env
+                    """
+                }
+            }
+        }
+
+        // ================= BUILD & PUSH FRONTEND =================
 
         stage('Build Frontend Image') {
             steps {
-                dir('frontend') {
+                dir('EasyCRUD/frontend') {
                     sh "docker build -t $DOCKER_FRONTEND . --no-cache"
                 }
             }
@@ -212,8 +183,6 @@ EOF
                 }
             }
         }
-
-        // ================= DEPLOY FRONTEND =================
 
         stage('Deploy Frontend to EKS') {
             steps {
@@ -243,7 +212,7 @@ EOF
 
     post {
         success {
-            echo "🎉 Full CI/CD Pipeline Successful on example-eks-cluster!"
+            echo "🎉 Full CI/CD Deployment Completed Successfully!"
         }
         failure {
             echo "❌ Pipeline Failed!"
