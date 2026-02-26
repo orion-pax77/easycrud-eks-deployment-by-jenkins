@@ -34,7 +34,7 @@ data "aws_subnets" "default" {
 # IAM Role for EKS Cluster
 
 resource "aws_iam_role" "eks_cluster_role" {
-  name = "eks-cluster-role"
+  name = "easycrud-cluster-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
 # EKS Cluster
 
 resource "aws_eks_cluster" "eks_cluster" {
-  name     = "example-eks-cluster"
+  name     = "easycrud-eks-cluster"
   role_arn = aws_iam_role.eks_cluster_role.arn
   version  = "1.34"
 
@@ -74,7 +74,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 # IAM Role for Node Group
 
 resource "aws_iam_role" "eks_node_role" {
-  name = "eks-node-group-role"
+  name = "easycrud-eks-node-group-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
