@@ -1,3 +1,20 @@
+# Service file
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+spec:
+  type: LoadBalancer
+  selector:
+    app: backend
+  ports:
+    - name: lb
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+      
+---
+# Deployment file
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,17 +35,4 @@ spec:
           image: orionpax77/easycrud1-jenkins:backend
           ports:
             - containerPort: 8080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-svc
-spec:
-  type: LoadBalancer
-  selector:
-    app: backend
-  ports:
-    - name: lb
-      protocol: TCP
-      port: 8080
-      targetPort: 8080
+
