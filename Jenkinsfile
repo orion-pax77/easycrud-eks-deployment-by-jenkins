@@ -181,7 +181,7 @@ EOF
         stage('Update Frontend .env File') {
             steps {
                 sh """
-                        sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
+                        sed -i 's|VITE_API_URL=.*|VITE_API_URL=http://${BACKEND_LB}:8080/api|' frontend/.env
                 """
             }
         }
