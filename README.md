@@ -13,7 +13,7 @@ This project automates deployment of a **containerized application on AWS EKS** 
 Repository:
 
 ```
-https://github.com/orion-pax77/Project.git
+https://github.com/orion-pax77/easycrud-eks-deployment-by-jenkins.git
 ```
 
 ---
