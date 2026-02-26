@@ -18,7 +18,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/orion-pax77/Project.git'
+                    url: 'https://github.com/orion-pax77/easycrud-eks-deployment-by-jenkins.git'
             }
         }
 
