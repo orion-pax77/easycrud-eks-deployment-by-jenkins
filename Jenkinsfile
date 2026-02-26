@@ -109,22 +109,27 @@ pipeline {
 
         // ================= CONFIGURE EKS =================
 
-        stage('Configure kubectl for EKS') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]]) {
-                    sh """
-                        aws eks update-kubeconfig \
-                        --region $AWS_REGION \
-                        --name $EKS_CLUSTER_NAME
-                    """
-                }
-            }
+       stage('Configure kubectl for EKS') {
+    steps {
+        withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds',
+            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
+
+            sh """
+                export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                aws eks update-kubeconfig \
+                --region ${AWS_REGION} \
+                --name example-eks-cluster
+
+                kubectl get nodes
+            """
         }
+    }
+}
 
         // ================= DEPLOY BACKEND =================
 
