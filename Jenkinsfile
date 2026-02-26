@@ -212,12 +212,6 @@ EOF
         stage('Deploy Frontend to EKS') {
             steps {
                 sh """
-                    export AWS_DEFAULT_REGION=${AWS_REGION}
-
-                            aws eks update-kubeconfig \
-                                --region ${AWS_REGION} \
-                                --name ${EKS_CLUSTER_NAME}
-                                
                     kubectl apply -f k8s/frontend-deployment.yaml
                     kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
                     kubectl rollout status deployment/frontend-dep
