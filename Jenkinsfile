@@ -107,74 +107,52 @@ pipeline {
             }
         }
 
-        // ================= CONFIGURE EKS =================
+        // ================= DEPLOY TO EKS =================
 
-       stage('Configure kubectl for EKS') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws-creds',
-            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-        ]]) {
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
 
-            sh """
-                export AWS_DEFAULT_REGION=${AWS_REGION}
+                    sh """
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+                        export AWS_REGION=${AWS_REGION}
 
-                aws eks update-kubeconfig \
-                --region ${AWS_REGION} \
-                --name example-eks-cluster
+                        echo "Verifying AWS credentials..."
+                        aws sts get-caller-identity
 
-                kubectl get nodes
-            """
+                        echo "Updating kubeconfig..."
+                        aws eks update-kubeconfig \
+                            --region ${AWS_REGION} \
+                            --name ${EKS_CLUSTER_NAME}
+
+                        echo "Testing cluster access..."
+                        kubectl get nodes
+
+                        echo "Deploying Backend..."
+                        kubectl apply -f k8s/backend-deployment.yml
+                        kubectl set image deployment/backend-dep backend=${DOCKER_BACKEND}
+                        kubectl rollout status deployment/backend-dep
+
+                        echo "Deploying Frontend..."
+                        kubectl apply -f k8s/frontend-deployment.yml
+                        kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
+                        kubectl rollout status deployment/frontend-dep
+
+                        echo "Final Verification..."
+                        kubectl get pods
+                        kubectl get svc
+                    """
+                }
+            }
         }
     }
-}
-
-        // ================= DEPLOY to EKS =================
-
-       stage('Deploy to EKS') {
-    steps {
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws-creds',
-            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-        ]]) {
-
-            sh """
-                export AWS_DEFAULT_REGION=${AWS_REGION}
-                export AWS_REGION=${AWS_REGION}
-
-                echo "Verifying AWS credentials..."
-                aws sts get-caller-identity
-
-                echo "Updating kubeconfig..."
-                aws eks update-kubeconfig \
-                    --region ${AWS_REGION} \
-                    --name example-eks-cluster
-
-                echo "Testing cluster access..."
-                kubectl get nodes
-
-                echo "Deploying Backend..."
-                kubectl apply -f k8s/backend-deployment.yml
-                kubectl set image deployment/backend-dep backend=${DOCKER_BACKEND}
-                kubectl rollout status deployment/backend-dep
-
-                echo "Deploying Frontend..."
-                kubectl apply -f k8s/frontend-deployment.yml
-                kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
-                kubectl rollout status deployment/frontend-dep
-
-                echo "Final Verification..."
-                kubectl get pods
-                kubectl get svc
-            """
-        }
-    }
-}
-    
 
     post {
         success {
