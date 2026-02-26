@@ -117,6 +117,23 @@ sudo systemctl enable jenkins
 ```
 
 ---
+## 🔹 Access Jenkins
+
+Get admin password:
+
+```bash
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+Open browser:
+
+```
+http://<EC2-PUBLIC-IP>:8080
+```
+
+Setup Jenkins and Install Suggested Plugins
+
+----
 
 ## 🔄 Change Jenkins Default Port (8080 → 8081)
 
