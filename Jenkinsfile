@@ -46,7 +46,6 @@ pipeline {
                         script: "terraform -chdir=terraform output -raw rds_endpoint",
                         returnStdout: true
                     ).trim()
-
                     echo "RDS Endpoint: ${env.RDS_ENDPOINT}"
                 }
             }
@@ -57,17 +56,12 @@ pipeline {
         stage('Update application.properties') {
             steps {
                 sh """
-                    if [ -f backend/src/main/resources/application.properties ]; then
-                        sed -i 's|spring.datasource.url=.*|spring.datasource.url=jdbc:mariadb://${RDS_ENDPOINT}:${DB_PORT}/student_db?sslMode=trust|' backend/src/main/resources/application.properties
-                        sed -i 's|spring.datasource.username=.*|spring.datasource.username=admin|' backend/src/main/resources/application.properties
-                        sed -i 's|spring.datasource.password=.*|spring.datasource.password=redhat123|' backend/src/main/resources/application.properties
-                        sed -i 's|spring.jpa.hibernate.ddl-auto=.*|spring.jpa.hibernate.ddl-auto=update|' backend/src/main/resources/application.properties
-                        sed -i 's|spring.jpa.show-sql=.*|spring.jpa.show-sql=true|' backend/src/main/resources/application.properties
-                        sed -i 's|spring.datasource.driver-class-name=.*|spring.datasource.driver-class-name=org.mariadb.jdbc.Driver|' backend/src/main/resources/application.properties
-                    else
-                        echo "application.properties not found!"
-                        exit 1
-                    fi
+                    sed -i 's|spring.datasource.url=.*|spring.datasource.url=jdbc:mariadb://${RDS_ENDPOINT}:${DB_PORT}/student_db?sslMode=trust|' backend/src/main/resources/application.properties
+                    sed -i 's|spring.datasource.username=.*|spring.datasource.username=admin|' backend/src/main/resources/application.properties
+                    sed -i 's|spring.datasource.password=.*|spring.datasource.password=redhat123|' backend/src/main/resources/application.properties
+                    sed -i 's|spring.jpa.hibernate.ddl-auto=.*|spring.jpa.hibernate.ddl-auto=update|' backend/src/main/resources/application.properties
+                    sed -i 's|spring.jpa.show-sql=.*|spring.jpa.show-sql=true|' backend/src/main/resources/application.properties
+                    sed -i 's|spring.datasource.driver-class-name=.*|spring.datasource.driver-class-name=org.mariadb.jdbc.Driver|' backend/src/main/resources/application.properties
                 """
             }
         }
@@ -90,11 +84,103 @@ pipeline {
             }
         }
 
-        
+        stage('DockerHub Login & Push') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_BACKEND
+                        docker push $DOCKER_FRONTEND
+                        docker logout
+                    '''
+                }
+            }
+        }
 
         // ================= DEPLOY TO EKS =================
 
-        stage('Deploy to EKS') {
+        stage('Deploy Backend & Get LB DNS') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+
+                    script {
+                        sh """
+                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                            export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                            aws eks update-kubeconfig \
+                                --region ${AWS_REGION} \
+                                --name ${EKS_CLUSTER_NAME}
+
+                            kubectl apply -f k8s/backend-deployment.yml
+                            kubectl set image deployment/backend-dep backend=${DOCKER_BACKEND}
+                            kubectl rollout status deployment/backend-dep
+                        """
+
+                        echo "Waiting for LoadBalancer..."
+                        sleep 30
+
+                        env.BACKEND_LB = sh(
+                            script: """
+                                kubectl get svc backend-svc \
+                                -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        echo "Backend LoadBalancer DNS: ${env.BACKEND_LB}"
+                    }
+                }
+            }
+        }
+
+        // ================= UPDATE FRONTEND .env =================
+
+        stage('Update Frontend .env') {
+            steps {
+                sh """
+                    sed -i 's|VITE_API_URL=.*|VITE_API_URL=http://${BACKEND_LB}:8080/api|' frontend/.env
+                """
+            }
+        }
+
+        // ================= REBUILD & PUSH FRONTEND =================
+
+        stage('Rebuild Frontend Image') {
+            steps {
+                dir('frontend') {
+                    sh "docker build -t $DOCKER_FRONTEND . --no-cache"
+                }
+            }
+        }
+
+        stage('Push Updated Frontend Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_FRONTEND
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Frontend to EKS') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -107,30 +193,11 @@ pipeline {
                         export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
-                        export AWS_REGION=${AWS_REGION}
 
-                        echo "Verifying AWS credentials..."
-                        aws sts get-caller-identity
-
-                        echo "Updating kubeconfig..."
-                        aws eks update-kubeconfig \
-                            --region ${AWS_REGION} \
-                            --name ${EKS_CLUSTER_NAME}
-
-                        echo "Testing cluster access..."
-                        kubectl get nodes
-
-                        echo "Deploying Backend..."
-                        kubectl apply -f k8s/backend-deployment.yml
-                        kubectl set image deployment/backend-dep backend=${DOCKER_BACKEND}
-                        kubectl rollout status deployment/backend-dep
-
-                        echo "Deploying Frontend..."
                         kubectl apply -f k8s/frontend-deployment.yml
                         kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
                         kubectl rollout status deployment/frontend-dep
 
-                        echo "Final Verification..."
                         kubectl get pods
                         kubectl get svc
                     """
@@ -141,7 +208,7 @@ pipeline {
 
     post {
         success {
-            echo "🎉 Successfully deployed to EKS cluster: example-eks-cluster"
+            echo "🎉 Full CI/CD Pipeline Successful on example-eks-cluster!"
         }
         failure {
             echo "❌ Pipeline Failed!"
