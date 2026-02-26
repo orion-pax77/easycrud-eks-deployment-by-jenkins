@@ -181,12 +181,7 @@ EOF
         stage('Update Frontend .env File') {
             steps {
                 sh """
-                    if [ -f frontend/.env ]; then
                         sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
-                    else
-                        echo ".env file not found!"
-                        exit 1
-                    fi
                 """
             }
         }
