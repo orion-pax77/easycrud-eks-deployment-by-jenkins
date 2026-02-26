@@ -163,14 +163,10 @@ EOF
                             kubectl rollout status deployment/backend-dep
                         """
 
-                        echo "Waiting for Backend LoadBalancer..."
                         sleep 30
 
                         env.BACKEND_LB = sh(
-                            script: """
-                                kubectl get svc backend-svc \
-                                -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-                            """,
+                            script: "kubectl get svc backend-svc -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'",
                             returnStdout: true
                         ).trim()
 
@@ -186,7 +182,7 @@ EOF
             steps {
                 sh """
                     if [ -f frontend/.env ]; then
-                        sed -i 's|REACT_APP_BACKEND_URL=http://<BACKEND_LOADBALANCER_DNS>:8080|' frontend/.env
+                        sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
                     else
                         echo ".env file not found!"
                         exit 1
@@ -199,7 +195,7 @@ EOF
 
         stage('Build Frontend Image') {
             steps {
-                dir('EasyCRUD/frontend') {
+                dir('frontend') {
                     sh "docker build -t $DOCKER_FRONTEND . --no-cache"
                 }
             }
