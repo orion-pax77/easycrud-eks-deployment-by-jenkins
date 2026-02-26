@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend-pod
-          image: pranavmisal1002/frontend5:v1
+          image: orionpax77/easycrud1-jenkins:frontend
           ports:
             - containerPort: 80
 ---
