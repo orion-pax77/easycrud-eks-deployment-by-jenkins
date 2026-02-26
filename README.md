@@ -95,6 +95,14 @@ java -version
 
 ---
 
+## 💾 Install MySQL Client
+
+```bash
+sudo apt install mysql-client -y
+```
+
+---
+
 ## 🛠 Install Jenkins
 
 ```bash
