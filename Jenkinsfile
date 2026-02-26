@@ -51,6 +51,51 @@ pipeline {
             }
         }
 
+        // ================= CREATE DATABASE =================
+
+        stage('Create MariaDB Database & Table') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'rds-creds',
+                    usernameVariable: 'DB_USER',
+                    passwordVariable: 'DB_PASS'
+                )]) {
+
+                    sh '''
+                        export MYSQL_PWD="$DB_PASS"
+
+                        mysql -h "$RDS_ENDPOINT" \
+                              -P "$DB_PORT" \
+                              -u "$DB_USER" <<EOF
+
+                        CREATE DATABASE IF NOT EXISTS student_db;
+
+                        CREATE USER IF NOT EXISTS 'admin'@'%' IDENTIFIED BY 'redhat123';
+
+                        GRANT ALL PRIVILEGES ON student_db.* TO 'admin'@'%';
+
+                        FLUSH PRIVILEGES;
+
+                        USE student_db;
+
+                        CREATE TABLE IF NOT EXISTS students (
+                            id BIGINT NOT NULL AUTO_INCREMENT,
+                            name VARCHAR(255),
+                            email VARCHAR(255),
+                            course VARCHAR(255),
+                            student_class VARCHAR(255),
+                            percentage DOUBLE,
+                            branch VARCHAR(255),
+                            mobile_number VARCHAR(255),
+                            PRIMARY KEY (id)
+                        );
+
+EOF
+                    '''
+                }
+            }
+        }
+
         // ================= UPDATE application.properties =================
 
         stage('Update application.properties') {
@@ -94,7 +139,7 @@ pipeline {
 
         // ================= DEPLOY BACKEND =================
 
-        stage('Deploy Backend & Fetch LoadBalancer DNS') {
+        stage('Deploy Backend & Fetch LB') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -129,29 +174,19 @@ pipeline {
                             returnStdout: true
                         ).trim()
 
-                        echo "Backend LoadBalancer DNS: ${env.BACKEND_LB}"
+                        echo "Backend LB DNS: ${env.BACKEND_LB}"
                     }
                 }
             }
         }
 
-        // ================= FRONTEND STEPS AS REQUESTED =================
+        // ================= UPDATE FRONTEND .env =================
 
-        stage('Navigate to Frontend Directory') {
-            steps {
-                dir('EasyCRUD/frontend') {
-                    sh '''
-                        echo "Checking .env file..."
-                        ls -a
-                    '''
-                }
-            }
-        }
-
-        stage('Update .env File with Backend LB URL') {
+        stage('Update Frontend .env') {
             steps {
                 dir('EasyCRUD/frontend') {
                     sh """
+                        ls -a
                         sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' .env
                     """
                 }
