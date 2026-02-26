@@ -156,12 +156,17 @@ pipeline {
 
         stage('Deploy Frontend to Kubernetes') {
             steps {
+                withCredentials([[
+            $class: 'AmazonWebServicesCredentialsBinding',
+            credentialsId: 'aws-creds',
+            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+        ]]) {
                 sh """
+                    export AWS_DEFAULT_REGION=${AWS_REGION}
+
                     kubectl apply -f k8s/frontend-deployment.yml
-
-                    kubectl set image deployment/frontend-dep \
-                    frontend-pod=$DOCKER_FRONTEND
-
+                    kubectl set image deployment/frontend-dep frontend-pod=$DOCKER_FRONTEND
                     kubectl rollout status deployment/frontend-dep
                 """
             }
