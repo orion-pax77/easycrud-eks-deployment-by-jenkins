@@ -66,7 +66,7 @@ pipeline {
             }
         }
 
-        // ================= BUILD IMAGES =================
+        // ================= BUILD BACKEND =================
 
         stage('Build Backend Image') {
             steps {
@@ -76,15 +76,7 @@ pipeline {
             }
         }
 
-        stage('Build Frontend Image') {
-            steps {
-                dir('frontend') {
-                    sh "docker build -t $DOCKER_FRONTEND . --no-cache"
-                }
-            }
-        }
-
-        stage('DockerHub Login & Push') {
+        stage('Push Backend Image') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-cred',
@@ -94,16 +86,15 @@ pipeline {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         docker push $DOCKER_BACKEND
-                        docker push $DOCKER_FRONTEND
                         docker logout
                     '''
                 }
             }
         }
 
-        // ================= DEPLOY TO EKS =================
+        // ================= DEPLOY BACKEND =================
 
-        stage('Deploy Backend & Get LB DNS') {
+        stage('Deploy Backend & Fetch LB') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -127,7 +118,7 @@ pipeline {
                             kubectl rollout status deployment/backend-dep
                         """
 
-                        echo "Waiting for LoadBalancer..."
+                        echo "Waiting for Backend LoadBalancer..."
                         sleep 30
 
                         env.BACKEND_LB = sh(
@@ -149,14 +140,14 @@ pipeline {
         stage('Update Frontend .env') {
             steps {
                 sh """
-                    sed -i 's|VITE_API_URL=.*|VITE_API_URL=http://${BACKEND_LB}:8080/api|' frontend/.env
+                    sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
                 """
             }
         }
 
-        // ================= REBUILD & PUSH FRONTEND =================
+        // ================= BUILD FRONTEND =================
 
-        stage('Rebuild Frontend Image') {
+        stage('Build Frontend Image') {
             steps {
                 dir('frontend') {
                     sh "docker build -t $DOCKER_FRONTEND . --no-cache"
@@ -164,7 +155,7 @@ pipeline {
             }
         }
 
-        stage('Push Updated Frontend Image') {
+        stage('Push Frontend Image') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-cred',
@@ -179,6 +170,8 @@ pipeline {
                 }
             }
         }
+
+        // ================= DEPLOY FRONTEND =================
 
         stage('Deploy Frontend to EKS') {
             steps {
