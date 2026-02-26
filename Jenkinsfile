@@ -182,14 +182,16 @@ EOF
 
         // ================= UPDATE FRONTEND .env =================
 
-        stage('Update Frontend .env') {
+        stage('Update Frontend .env File') {
             steps {
-                dir('EasyCRUD/frontend') {
-                    sh """
-                        ls -a
-                        sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
-                    """
-                }
+                sh """
+                    if [ -f frontend/.env ]; then
+                        sed -i 's|REACT_APP_BACKEND_URL=http://<BACKEND_LOADBALANCER_DNS>:8080|' frontend/.env
+                    else
+                        echo ".env file not found!"
+                        exit 1
+                    fi
+                """
             }
         }
 
