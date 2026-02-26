@@ -282,7 +282,7 @@ Manage Jenkins → Credentials → Global → Add Credentials
 ## 🔹 Create New Job
 
 * Click **New Item**
-* Name → `project-eks-deployment`
+* Name → `easycrud-eks-deployment`
 * Select → **Pipeline**
 * Click OK
 
@@ -497,7 +497,7 @@ http://<EXTERNAL-LOADBALANCER-DNS>
 Navigate to Jenkins workspace:
 
 ```bash
-cd /var/lib/jenkins/workspace/project-eks-deployment/terraform
+cd /var/lib/jenkins/workspace/easycrud-eks-deployment/terraform
 terraform destroy --auto-approve
 ```
 
