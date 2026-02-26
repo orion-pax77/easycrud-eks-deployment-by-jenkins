@@ -187,7 +187,7 @@ EOF
                 dir('EasyCRUD/frontend') {
                     sh """
                         ls -a
-                        sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' .env
+                        sed -i 's|REACT_APP_BACKEND_URL=.*|REACT_APP_BACKEND_URL=http://${BACKEND_LB}:8080|' frontend/.env
                     """
                 }
             }
