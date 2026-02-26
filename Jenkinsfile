@@ -5,8 +5,9 @@ pipeline {
         AWS_REGION = "us-east-1"
         DB_PORT    = "3306"
         IMAGE_TAG  = "${BUILD_NUMBER}"
-        EKS_CLUSTER_NAME = "your-eks-cluster-name"
-        DOCKER_BACKEND = "orionpax77/easycrud1-jenkins:backend-${BUILD_NUMBER}"
+        EKS_CLUSTER_NAME = "example-eks-cluster"
+
+        DOCKER_BACKEND  = "orionpax77/easycrud1-jenkins:backend-${BUILD_NUMBER}"
         DOCKER_FRONTEND = "orionpax77/easycrud1-jenkins:frontend-${BUILD_NUMBER}"
     }
 
@@ -14,7 +15,8 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/orion-pax77/Project.git'
+                git branch: 'main',
+                    url: 'https://github.com/orion-pax77/Project.git'
             }
         }
 
@@ -50,39 +52,23 @@ pipeline {
             }
         }
 
-        // ================= DATABASE SETUP =================
+        // ================= UPDATE application.properties =================
 
-        stage('Create MariaDB Database & Table') {
+        stage('Update application.properties') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'rds-creds',
-                    usernameVariable: 'DB_USER',
-                    passwordVariable: 'DB_PASS'
-                )]) {
-
-                    sh '''
-                        export MYSQL_PWD="$DB_PASS"
-
-                        mysql -h "$RDS_ENDPOINT" \
-                              -P "$DB_PORT" \
-                              -u "$DB_USER" <<EOF
-
-                        CREATE DATABASE IF NOT EXISTS student_db;
-                        CREATE TABLE IF NOT EXISTS student_db.students (
-                            id BIGINT NOT NULL AUTO_INCREMENT,
-                            name VARCHAR(255),
-                            email VARCHAR(255),
-                            course VARCHAR(255),
-                            student_class VARCHAR(255),
-                            percentage DOUBLE,
-                            branch VARCHAR(255),
-                            mobile_number VARCHAR(255),
-                            PRIMARY KEY (id)
-                        );
-
-EOF
-                    '''
-                }
+                sh """
+                    if [ -f backend/src/main/resources/application.properties ]; then
+                        sed -i 's|spring.datasource.url=.*|spring.datasource.url=jdbc:mariadb://${RDS_ENDPOINT}:${DB_PORT}/student_db?sslMode=trust|' backend/src/main/resources/application.properties
+                        sed -i 's|spring.datasource.username=.*|spring.datasource.username=admin|' backend/src/main/resources/application.properties
+                        sed -i 's|spring.datasource.password=.*|spring.datasource.password=redhat123|' backend/src/main/resources/application.properties
+                        sed -i 's|spring.jpa.hibernate.ddl-auto=.*|spring.jpa.hibernate.ddl-auto=update|' backend/src/main/resources/application.properties
+                        sed -i 's|spring.jpa.show-sql=.*|spring.jpa.show-sql=true|' backend/src/main/resources/application.properties
+                        sed -i 's|spring.datasource.driver-class-name=.*|spring.datasource.driver-class-name=org.mariadb.jdbc.Driver|' backend/src/main/resources/application.properties
+                    else
+                        echo "application.properties not found!"
+                        exit 1
+                    fi
+                """
             }
         }
 
@@ -121,7 +107,7 @@ EOF
             }
         }
 
-        // ================= EKS CONFIG =================
+        // ================= CONFIGURE EKS =================
 
         stage('Configure kubectl for EKS') {
             steps {
@@ -140,7 +126,7 @@ EOF
             }
         }
 
-        // ================= KUBERNETES DEPLOY =================
+        // ================= DEPLOY BACKEND =================
 
         stage('Deploy Backend to Kubernetes') {
             steps {
@@ -154,6 +140,8 @@ EOF
                 """
             }
         }
+
+        // ================= DEPLOY FRONTEND =================
 
         stage('Deploy Frontend to Kubernetes') {
             steps {
@@ -180,7 +168,7 @@ EOF
 
     post {
         success {
-            echo "🎉 Infra + Docker + Kubernetes Deployment Successful!"
+            echo "🎉 Successfully deployed to EKS cluster: example-eks-cluster"
         }
         failure {
             echo "❌ Pipeline Failed!"
