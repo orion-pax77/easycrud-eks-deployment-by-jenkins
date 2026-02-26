@@ -153,7 +153,7 @@ EOF
                                 --region ${AWS_REGION} \
                                 --name ${EKS_CLUSTER_NAME}
 
-                            kubectl apply -f k8s/backend-deployment.yml
+                            kubectl apply -f k8s/backend-deployment.yaml
                             kubectl set image deployment/backend-dep backend=${DOCKER_BACKEND}
                             kubectl rollout status deployment/backend-dep
                         """
@@ -212,7 +212,7 @@ EOF
         stage('Deploy Frontend to EKS') {
             steps {
                 sh """
-                    kubectl apply -f k8s/frontend-deployment.yml
+                    kubectl apply -f k8s/frontend-deployment.yaml
                     kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
                     kubectl rollout status deployment/frontend-dep
 
