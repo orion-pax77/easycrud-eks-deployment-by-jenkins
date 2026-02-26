@@ -2,16 +2,18 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = "us-east-1"
-        DB_PORT    = "3306"
-        IMAGE_TAG  = "${BUILD_NUMBER}"
-        EKS_CLUSTER_NAME = "example-eks-cluster"
+        AWS_REGION        = "us-east-1"
+        DB_PORT           = "3306"
+        IMAGE_TAG         = "${BUILD_NUMBER}"
+        EKS_CLUSTER_NAME  = "easycrud-eks-cluster"
 
         DOCKER_BACKEND  = "orionpax77/easycrud1-jenkins:backend-${BUILD_NUMBER}"
         DOCKER_FRONTEND = "orionpax77/easycrud1-jenkins:frontend-${BUILD_NUMBER}"
     }
 
     stages {
+
+        // ================= CHECKOUT =================
 
         stage('Checkout Code') {
             steps {
@@ -30,11 +32,13 @@ pipeline {
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
-                    sh '''
+                    sh """
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+
                         terraform -chdir=terraform init -upgrade
                         terraform -chdir=terraform validate
                         terraform -chdir=terraform apply --auto-approve
-                    '''
+                    """
                 }
             }
         }
@@ -60,21 +64,14 @@ pipeline {
                     usernameVariable: 'DB_USER',
                     passwordVariable: 'DB_PASS'
                 )]) {
-
-                    sh '''
+                    sh """
                         export MYSQL_PWD="$DB_PASS"
 
-                        mysql -h "$RDS_ENDPOINT" \
-                              -P "$DB_PORT" \
-                              -u "$DB_USER" <<EOF
+                        mysql -h "${RDS_ENDPOINT}" \
+                              -P "${DB_PORT}" \
+                              -u "${DB_USER}" <<EOF
 
                         CREATE DATABASE IF NOT EXISTS student_db;
-
-                        CREATE USER IF NOT EXISTS 'admin'@'%' IDENTIFIED BY 'redhat123';
-
-                        GRANT ALL PRIVILEGES ON student_db.* TO 'admin'@'%';
-
-                        FLUSH PRIVILEGES;
 
                         USE student_db;
 
@@ -91,12 +88,12 @@ pipeline {
                         );
 
 EOF
-                    '''
+                    """
                 }
             }
         }
 
-        // ================= UPDATE application.properties =================
+        // ================= UPDATE BACKEND CONFIG =================
 
         stage('Update application.properties') {
             steps {
@@ -116,7 +113,7 @@ EOF
         stage('Build Backend Image') {
             steps {
                 dir('backend') {
-                    sh "docker build -t $DOCKER_BACKEND . --no-cache"
+                    sh "docker build -t ${DOCKER_BACKEND} . --no-cache"
                 }
             }
         }
@@ -128,11 +125,11 @@ EOF
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh '''
+                    sh """
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push $DOCKER_BACKEND
+                        docker push ${DOCKER_BACKEND}
                         docker logout
-                    '''
+                    """
                 }
             }
         }
@@ -150,8 +147,6 @@ EOF
 
                     script {
                         sh """
-                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                             export AWS_DEFAULT_REGION=${AWS_REGION}
 
                             aws eks update-kubeconfig \
@@ -176,12 +171,12 @@ EOF
             }
         }
 
-        // ================= UPDATE FRONTEND .env =================
+        // ================= UPDATE FRONTEND ENV =================
 
         stage('Update Frontend .env File') {
             steps {
                 sh """
-                        sed -i 's|VITE_API_URL=.*|VITE_API_URL=http://${BACKEND_LB}:8080/api|' frontend/.env
+                    sed -i 's|VITE_API_URL=.*|VITE_API_URL=http://${BACKEND_LB}:8080/api|' frontend/.env
                 """
             }
         }
@@ -191,7 +186,7 @@ EOF
         stage('Build Frontend Image') {
             steps {
                 dir('frontend') {
-                    sh "docker build -t $DOCKER_FRONTEND . --no-cache"
+                    sh "docker build -t ${DOCKER_FRONTEND} . --no-cache"
                 }
             }
         }
@@ -203,37 +198,27 @@ EOF
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh '''
+                    sh """
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push $DOCKER_FRONTEND
+                        docker push ${DOCKER_FRONTEND}
                         docker logout
-                    '''
+                    """
                 }
             }
         }
 
+        // ================= DEPLOY FRONTEND =================
+
         stage('Deploy Frontend to EKS') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]]) {
+                sh """
+                    kubectl apply -f k8s/frontend-deployment.yml
+                    kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
+                    kubectl rollout status deployment/frontend-dep
 
-                    sh """
-                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                        export AWS_DEFAULT_REGION=${AWS_REGION}
-
-                        kubectl apply -f k8s/frontend-deployment.yml
-                        kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
-                        kubectl rollout status deployment/frontend-dep
-
-                        kubectl get pods
-                        kubectl get svc
-                    """
-                }
+                    kubectl get pods
+                    kubectl get svc
+                """
             }
         }
     }
