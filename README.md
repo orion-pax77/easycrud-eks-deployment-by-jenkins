@@ -176,6 +176,39 @@ http://<EC2-PUBLIC-IP>:8081
 
 ---
 
+## 🔹 Install & Configure AWS CLI
+
+### Install AWS CLI (Snap)
+
+```bash
+sudo snap install aws-cli --classic
+```
+
+---
+
+### Configure AWS Credentials
+
+```bash
+aws configure
+```
+
+Enter:
+
+* **AWS Access Key ID**
+* **AWS Secret Access Key**
+* **Default region** (e.g., `us-east-1`)
+* **Default output format** (`json`)
+
+This creates configuration files in:
+
+```
+~/.aws/credentials
+~/.aws/config
+```
+
+---
+
+
 # 🟢 Install Docker
 
 ```bash
