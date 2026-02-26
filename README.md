@@ -1,484 +1,501 @@
-# 🚀 EasyCRUD – Cloud-Native Student Registration System on AWS (EKS + RDS + Docker)
-EasyCRUD is a full-stack CRUD web application deployed using modern **DevOps** and **cloud-native technologies**.  
-This project demonstrates **containerization with Docker**, **Kubernetes orchestration on AWS EKS**, **managed database integration with Amazon RDS**, and a **scalable microservices architecture**.
+# 🚀 Jenkins + Terraform + Docker + EKS Deployment Guide
 
+## (Production CI/CD Setup – Pipeline Script from SCM)
 
-### Deployed Using
+This project automates deployment of a **containerized application on AWS EKS** using:
 
-- Docker
-- AWS EKS (Kubernetes)
-- AWS RDS (MariaDB)
-- Kubernetes Services
-- Load Balancer 
+* ✅ **Terraform (Infrastructure as Code)**
+* ✅ **AWS EKS (Kubernetes Cluster)**
+* ✅ **Docker (Containerization)**
+* ✅ **Docker Hub (Image Registry)**
+* ✅ **Jenkins CI/CD (Pipeline Script from SCM)**
 
-## 🛠️ Technologies Used
+Repository:
 
-- **Frontend:** React  
-- **Backend:** Spring Boot  
-- **Database:** Amazon RDS (MariaDB)  
-- **Containers:** Docker & Docker Hub  
-- **Orchestration:** Kubernetes (AWS EKS)  
-- **Cloud Platform:** AWS EC2, EKS, RDS  
-## 📂 This Repository Contains
-
-- ✔ Database setup on **AWS RDS**
-- ✔ Backend Dockerization and deployment
-- ✔ Frontend Dockerization and deployment
-- ✔ Kubernetes pod and service configurations
-- ✔ Complete production-ready DevOps workflow
-
----
-## 🟢  1: Database Setup (Amazon RDS – MariaDB)
-
-📘 Follow the complete database setup guide (**Step 1 to Step 6**) here:  
-👉 [Database Setup Documentation](https://github.com/pranavmisal1002/EasyCrud-Docker#-phase-1-database-setup-amazon-rds--mariadb)
-
----  
-
-## 🟢  2: Create AWS EKS Cluster
-
-📘 Follow the complete AWS EKS cluster setup guide here:  
-👉 [AWS EKS Setup Documentation](https://github.com/pranavmisal1002/AWS-EKS-Setup)
+```
+https://github.com/orion-pax77/Project.git
+```
 
 ---
 
+# 📌 Prerequisites
 
-## 🔵 3 Backend Deployment Steps (Docker + DockerHub + EKS)
+## 🔹 AWS Requirements
 
-## Step 1: Install Docker
+* AWS Account (Free Tier not fully supported for EKS)
+* IAM User with permissions for:
 
-Install Docker on the EC2 instance and start the Docker service.
+  * EC2
+  * VPC
+  * IAM
+  * EKS
+  * ECR (if used)
+* Access Key & Secret Key
+
+---
+
+## 🔹 Required Accounts
+
+* Docker Hub Account
+* GitHub Repository
+
+---
+
+# 🟢 STEP 1: Launch EC2 Instance (Ubuntu for Jenkins)
+
+Go to:
+
+```
+AWS Console → EC2 → Launch Instance
+```
+
+### Select:
+
+* **AMI** → Ubuntu Server 22.04 LTS
+* **Instance Type** → c7i-flex.large (Recommended for EKS + Docker builds)
+* **Storage** → 30 GB
+
+---
+
+## 🔐 Security Group Ports
+
+| Port | Purpose          |
+| ---- | ---------------- |
+| 22   | SSH              |
+| 8081 | Jenkins          |
+| 80   | App LoadBalancer |
+| 443  | HTTPS (Optional) |
+
+Launch the instance.
+
+---
+
+## 🔹 Connect to EC2
+
+```bash
+ssh -i your-key.pem ubuntu@your-public-ip
+```
+
+---
+
+# 🟢 STEP 2: Install Required Software
+
+## ☕ Install Java (Required for Jenkins)
+
+```bash
+sudo apt update -y
+sudo apt install openjdk-17-jdk -y
+```
+
+Verify:
+
+```bash
+java -version
+```
+
+---
+
+## 🛠 Install Jenkins
+
+```bash
+sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+  /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+sudo apt update
+sudo apt install jenkins -y
+```
+
+Start Jenkins:
+
+```bash
+sudo systemctl start jenkins
+sudo systemctl enable jenkins
+```
+
+---
+
+## 🔄 Change Jenkins Default Port (8080 → 8081)
+
+```bash
+sudo nano /lib/systemd/system/jenkins.service
+```
+
+Change:
+
+```bash
+Environment="JENKINS_PORT=8080"
+```
+
+To:
+
+```bash
+Environment="JENKINS_PORT=8081"
+```
+
+Restart:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart jenkins
+```
+
+Access:
+
+```
+http://<EC2-PUBLIC-IP>:8081
+```
+
+---
+
+# 🟢 Install Docker
 
 ```bash
 sudo apt install docker.io -y
+sudo systemctl enable docker
 sudo systemctl start docker
 ```
 
-## Step 2: Clone Project Repository
-
-Clone the EasyCRUD project repository and navigate to the backend directory.
+Allow Jenkins to use Docker:
 
 ```bash
-git clone https://github.com/Rohit-1920/EasyCRUD-Updated.git
-```
-Move to backend directory
-```bash
-cd EasyCRUD/backend/
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
 ```
 
-## Step 3: Configure Backend Application
-
-Copy the `application.properties` file to the backend root directory and edit it.
-
-```bash
-cp src/main/resources/application.properties .
-```
-```bash
-nano application.properties
-```
-### Update Configuration Values
-
-Update the following values in the `application.properties` file:
-
-- **RDS Endpoint**
-- **Database Name:** `student_db`
-- **Database Username**
-- **Database Password**
-
-```bash
-server.port=8080
-spring.datasource.url=jdbc:mariadb://<RDS-EndPoint>:3306/student_db
-spring.datasource.username=<username>
-spring.datasource.password=<password>
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-```
-
-## Step 4: Create Dockerfile for Backend
-
-Create a Dockerfile for the backend application.
-
-```bash
-nano Dockerfile
-```
-Add the following content to the Dockerfile:
-
-```bash
-FROM maven:3.8.5-openjdk-17
-COPY . /opt/
-WORKDIR /opt
-RUN rm -rf src/main/resources/application.properties
-RUN cp -r application.properties src/main/resources/
-RUN mvn clean package
-WORKDIR target/
-CMD ["java","-jar","student-registration-backend-0.0.1-SNAPSHOT.jar"]
-```
-## Step 5: Build Backend Docker Image
-
-Build the Docker image for the backend application and verify the image creation.
-```bash
-docker build -t <images-name>:<tag> <dockerfile-path>
-```
-Example :
-```bash
-docker build -t backend:v1 .
-```
-Verify Docker images
-```bash
-docker images
-```
-### Step 6: Run Backend Container Locally (Testing)
-
-Run the backend Docker container on port `8080`:
-
-```bash
-docker run -d -p 8080:8080 backend:v1
-```
-Check running containers:
-```bash
-docker ps
-```
-✅ Verify backend in browser:
-```bash
-http://<BACKEND_EC2_PUBLIC_IP>:8080
-```
-> ✅ **Note:** Once the Docker image is built, rename (tag) it using the `docker tag` command before pushing it to Docker Hub.
-### Tag the Docker Image for Docker Hub
-**Syntax:**
-
-```bash
-docker tag <LOCAL_IMAGE_NAME>:<TAG> <DOCKERHUB_USERNAME>/<REPOSITORY_NAME>:<TAG>
-```
-**Example:**
-
-```bash
-docker tag backend:v1 pranavmisal1002/backend:v1
-```
-### Step 7: Push Backend Image to Docker Hub
-
-Login to Docker Hub:
-
-```bash
-docker login -u <username>
-```
-Push the backend image to Docker Hub repository:
-```bash
-docker push pranavmisal1002/backend:v1
-```
-✅ Backend image is now available for deployment on EKS.
-
-### ______________________________________________________________________________________________________
-
-## ✅ Deploy Backend on EKS Kubernetes Cluster
-### Step 8: Login to EKS Master / Bastion Node
-
-Login to the EC2 instance where `kubectl` is configured (EKS access node).
-
-Verify EKS cluster connectivity:
-
-```bash
-kubectl get nodes
-```
-### Step 9: Create Backend Pod YAML
-
-Create a Kubernetes manifest file for the backend pod and Service:
-
-```bash
-nano backend-deployment.yml
-```
-
-> ✅ **Note:** Please update the image name in both `frontend-deployment.yml` and `backend-deployment.yml` according to your Docker image name and tag.
-
-### 📄 Backend Deployment & Service Manifest (`backend-deployment.yml`)
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend-dep
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      name: backend-pod
-      labels:
-        app: backend
-    spec:
-      containers:
-        - name: backend
-          image: pranavmisal1002/backend2:v1
-          ports:
-            - containerPort: 8080
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-svc
-spec:
-  type: LoadBalancer
-  selector:
-    app: backend
-  ports:
-    - name: lb
-      protocol: TCP
-      port: 8080
-      targetPort: 8080
-```
-### Step 10: Deploy Backend Pod and Service
 
-Create the backend pod and service:
+# 🟢 Install Terraform
 
 ```bash
-kubectl apply -f backend-deployment.yml
+sudo apt install -y gnupg software-properties-common curl
+
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o \
+  /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+  https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+  sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+sudo apt update
+sudo apt install terraform -y
 ```
-Verify that the pod is running:
+
+Verify:
+
 ```bash
-kubectl get pods -o wide
+terraform -version
 ```
-Verify that the service is created:
+
+---
+
+# 🟢 Install kubectl
+
+```bash
+curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+```
+
+Verify:
+
+```bash
+kubectl version --client
+```
+
+---
+
+# 🟢 STEP 3: Install Required Jenkins Plugins
+
+Go to:
+
+```
+Manage Jenkins → Plugins → Available Plugins
+```
+
+Install:
+
+* ✅ Pipeline: Stage View
+* ✅ AWS Credentials
+
+Restart Jenkins.
+
+---
+
+# 🟢 STEP 4: Add Credentials in Jenkins
+
+Go to:
+
+```
+Manage Jenkins → Credentials → Global → Add Credentials
+```
+
+---
+
+## ✅ 1️⃣ AWS Credentials
+
+* Kind → AWS Credentials
+* ID → `aws-creds`
+* Add Access Key & Secret Key
+
+---
+
+## ✅ 2️⃣ Docker Hub Credentials
+
+* Kind → Username/Password
+* ID → `dockerhub-cred`
+
+---
+
+## ✅ 3️⃣ RDS Credentials
+
+* Kind → Username/Password
+* ID → `rds-creds`
+* Username → `admin`
+* Password → `redhat123`
+
+---
+
+# 🟢 STEP 5: Create Jenkins Pipeline (Pipeline Script from SCM)
+
+---
+
+## 🔹 Create New Job
+
+* Click **New Item**
+* Name → `project-eks-deployment`
+* Select → **Pipeline**
+* Click OK
+
+---
+
+## 🔹 Configure Pipeline
+
+Scroll to **Pipeline Section**
+
+```
+Definition → Pipeline script from SCM
+SCM → Git
+```
+
+### Repository URL
+
+```
+https://github.com/orion-pax77/Project.git
+```
+
+### Branch
+
+```
+*/main
+```
+
+### Script Path
+
+```
+Jenkinsfile
+```
+
+Click **Save**
+
+---
+
+# 🟢 STEP 6: Run the Pipeline
+
+Click:
+
+```
+Build Now
+```
+
+---
+
+# ⚙️ What Happens Automatically
+
+---
+
+## 1️⃣ Jenkins Clones Repository
+
+Clones:
+
+* `backend/`
+* `frontend/`
+* `terraform/`
+* `k8s/`
+* `Jenkinsfile`
+
+---
+
+## 2️⃣ Terraform Creates AWS Infrastructure
+
+Terraform provisions:
+
+* VPC
+* Subnets
+* Internet Gateway
+* IAM Roles
+* EKS Cluster
+* Worker Node Group
+
+---
+
+## 3️⃣ Jenkins Fetches RDS Endpoint
+
+```bash
+terraform output rds_endpoint
+```
+
+---
+
+## 4️⃣ Jenkins Creates Database & Table
+
+Creates:
+
+* `student_db`
+* `admin` user
+* `students` table
+
+---
+
+## 5️⃣ Jenkins Updates Backend Configuration
+
+Updates:
+
+```
+backend/src/main/resources/application.properties
+```
+
+Sets:
+
+* RDS endpoint
+* DB port
+* Username
+* Password
+* MariaDB driver
+
+---
+
+## 6️⃣ Jenkins Builds Backend Docker Image
+
+```bash
+docker build -t easycrud1-jenkins:backend .
+```
+
+---
+
+## 7️⃣ Push Backend Image to Docker Hub
+
+```bash
+docker push orionpax77/easycrud1-jenkins:backend
+```
+
+---
+
+## 8️⃣ Deploy Backend to EKS & Fetch LB
+
+```bash
+kubectl apply -f k8s/backend-deployment.yaml
+kubectl get svc backend-svc -o jsonpath={.status.loadBalancer.ingress[0].hostname}
+```
+
+---
+
+## 9️⃣ Jenkins Update Frontend .env File
+
+Sets:
+
+```
+VITE_API_URL=.*|VITE_API_URL=http://${BACKEND_LB}:8080/api
+```
+
+---
+
+## 🔟 Jenkins Builds Frontend Docker Image
+
+```bash
+docker build -t easycrud1-jenkins:frontend .
+```
+
+---
+
+## 7️⃣ Push Backend Image to Docker Hub
+
+```bash
+docker push orionpax77/easycrud1-jenkins:frontend
+```
+
+---
+
+## 1️⃣1️⃣ Deploy Frontend to EKS 
+
+```bash
+kubectl apply -f k8s/frontend-deployment.yaml
+kubectl get svc frontend-svc -o jsonpath={.status.loadBalancer.ingress[0].hostname}
+```
+
+
+# ⏳ Expected Deployment Time
+
+| Task                   | Time          |
+| ---------------------- | ------------- |
+| Terraform EKS Creation | 10–15 minutes |
+| Docker Build & Push    | 2–4 minutes   |
+| Full Pipeline          | 15–20 minutes |
+
+---
+
+# 🎯 Final Result
+
+After successful pipeline execution:
+
+* ✅ AWS EKS Cluster Created
+* ✅ Worker Nodes Running
+* ✅ Docker Image Built & Pushed
+* ✅ Application Deployed on Kubernetes
+* ✅ LoadBalancer Provisioned
+* ✅ Fully Automated CI/CD Deployment
+
+---
+
+# 🌐 Access Application
+
+Get External IP:
+
 ```bash
 kubectl get svc
 ```
-### Step 11: Verify Backend on EKS
 
-Check the backend service external IP (LoadBalancer):
+Access:
 
-```bash
-kubectl get svc backend-service
 ```
-Once the EXTERNAL-IP is available, open in your browser:
-```bash
-http://<LOADBALANCER_EXTERNAL_IP>:8080
+http://<EXTERNAL-LOADBALANCER-DNS>
 ```
-🎉 Backend pod setup on EKS is complete!
 
 ---
 
-## 🔵 4 Frontend Deployment Steps (Docker + DockerHub + EKS)
+# 🛑 Destroy Infrastructure
 
-### Step 1: Navigate to Frontend Directory
-
-Go to the frontend project directory:
+Navigate to Jenkins workspace:
 
 ```bash
-cd EasyCRUD/frontend/
-```
-Check hidden files such as .env:
-```bash
-ls -a
-```
-### Step 2: Edit `.env` File (Add Backend LoadBalancer URL)
-
-Edit the frontend environment configuration file:
-
-```bash
-nano .env
-```
-Add the following backend API endpoint in the `.env` file:
-
-```env
-# Backend API LoadBalancer URL
-REACT_APP_BACKEND_URL=http://<BACKEND_LOADBALANCER_DNS>:8080
-```
-## Step 3: Create Frontend Dockerfile
-
-Create a Dockerfile for the frontend application.
-
-```bash
-nano Dockerfile
-```
-Add the following content to the Dockerfile:
-```bash
-FROM node:25-alpine
-COPY . /opt/
-WORKDIR /opt
-RUN npm install
-RUN npm run build
-RUN apk update && apk add apache2
-RUN cp -rf dist/* /var/www/localhost/htdocs/
-EXPOSE 80
-CMD ["httpd","-D","FOREGROUND"]
-```
-### Step 4: Build Frontend Docker Image
-
-Build the frontend Docker image with Docker Hub tag:
-
-```bash
-docker build -t pranavmisal1002/frontend:v1 .
-```
-Verify Docker images:
-```bash
-docker images
-```
-### Step 5: Run Frontend Container Locally (Testing)
-
-Run the frontend Docker container on port `80`:
-
-```bash
-docker run -d -p 80:80 pranavmisal1002/frontend:v1
-```
-Check running containers:
-```bash
-docker ps
-```
-✅ Verify frontend in browser:
-```bash
-http://<FRONTEND_EC2_PUBLIC_IP>
-```
-### Step 6: Push Frontend Image to Docker Hub
-
-Login to Docker Hub:
-
-```bash
-docker login
-```
-Push the frontend image to Docker Hub:
-```bash
-docker push pranavmisal1002/frontend:v1
-```
-✅ Frontend image is now available for deployment on EKS.
-
-### _________________________________________________________________________________________________
-##  Deploy Frontend on EKS (Kubernetes)
-
-### Step 7: Login to EKS Master / Bastion Node
-
-Login to the EC2 instance where `kubectl` is configured (EKS access node).
-
-Verify EKS cluster connectivity:
-
-```bash
-kubectl get nodes
-```
-### Step 8: Create Frontend Deployment and Service YAML
-
-Create a Kubernetes manifest file for the frontend deployment and service:
-
-```bash
-nano frontend-deployment.yml
+cd /var/lib/jenkins/workspace/project-eks-deployment/terraform
+terraform destroy --auto-approve
 ```
 
-> ✅ **Note:** Please update the image name in both `frontend-deployment.yml` and `backend-deployment.yml` according to your Docker image name and tag.
-
-### 📄 Frontend Deployment & Service Manifest (`frontend-deployment.yml`)
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend-dep
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: frontend
-  template:
-    metadata:
-      name: frontend-pod
-      labels:
-        app: frontend
-    spec:
-      containers:
-        - name: frontend-pod
-          image: pranavmisal1002/frontend5:v1
-          ports:
-            - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: forntend-svc
-spec:
-  type: LoadBalancer
-  selector:
-    app: frontend
-  ports:
-    - name: frontend-lb
-      protocol: TCP
-      port: 80
-      targetPort: 80
-```
-### Step 9: Deploy Frontend Pod and Service
-
-Deploy the frontend application on the EKS cluster:
-
-```bash
-kubectl apply -f frontend-deployment.yml
-```
-Verify frontend pod status:
-```bash
-kubectl get pods -o wide
-```
-Verify frontend service creation:
-```bash
-kubectl get svc
-```
-### Step 11: Get LoadBalancer Endpoint and Verify
-
-Retrieve the LoadBalancer external endpoint for the frontend service:
-
-```bash
-kubectl get svc frontend-service
-```
-Copy the LoadBalancer DNS and open in your browser:
-
-```text
-http://<FRONTEND_LOADBALANCER_DNS>
-```
-🎉 Your EasyCRUD application is now live on Kubernetes (AWS EKS)! ✅
+Or create a separate destroy pipeline.
 
 ---
 
+# 🏁 Conclusion
 
-## 📖 Project Overview
+This project demonstrates:
 
-EasyCRUD is a cloud-native student registration system built using a modern DevOps workflow.  
-The application is fully containerized with Docker and deployed on AWS using Kubernetes (EKS), with a managed MariaDB database hosted on Amazon RDS.
-
-This project demonstrates real-world practices such as:
-  
-- Kubernetes orchestration  
-- Cloud infrastructure on AWS  
-- CI-style container workflows  
-- LoadBalancer-based service exposure  
+* ✅ Infrastructure as Code using Terraform
+* ✅ Kubernetes Deployment on AWS EKS
+* ✅ Docker Containerization
+* ✅ Automated CI/CD using Jenkins (Pipeline Script from SCM)
+* ✅ Production-grade Cloud Architecture
 
 ---
-
-
----
-
-## 🧪 Verification Checklist
-
-- ✅ Backend reachable via EKS LoadBalancer  
-- ✅ Frontend reachable via EKS LoadBalancer  
-- ✅ Database connected via RDS endpoint  
-- ✅ Pods in Running state  
-- ✅ Services exposed properly  
-
----
-
-## 🛠️ Common Troubleshooting
-
-### Pod not running?
-```bash
-kubectl describe pod <pod-name>
-kubectl logs <pod-name>
-```
-### Service not getting `EXTERNAL-IP`?
-
-Wait for 2–3 minutes (AWS LoadBalancer provisioning takes time), or run:
-
-```bash
-kubectl get svc -w
-```
-Backend not connecting to Amazon RDS?
-
-Check the following:
-
-✔ Security Group inbound rules allow database access
-
-✔ Correct RDS endpoint in application.properties file
-
