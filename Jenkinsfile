@@ -211,19 +211,25 @@ EOF
 
         stage('Deploy Frontend to EKS') {
             steps {
-                sh """
-                    export AWS_DEFAULT_REGION=${AWS_REGION}
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    sh """
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                     aws eks update-kubeconfig \
-                         --region ${AWS_REGION} \
-                         --name ${EKS_CLUSTER_NAME}
+                         aws eks update-kubeconfig \
+                             --region ${AWS_REGION} \
+                             --name ${EKS_CLUSTER_NAME}
                          
-                    kubectl apply -f k8s/frontend-deployment.yaml
-                    kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
-                    kubectl rollout status deployment/frontend-dep
+                         kubectl apply -f k8s/frontend-deployment.yaml
+                         kubectl set image deployment/frontend-dep frontend-pod=${DOCKER_FRONTEND}
+                         kubectl rollout status deployment/frontend-dep
 
-                    kubectl get pods
-                    kubectl get svc
+                         kubectl get pods
+                         kubectl get svc
                 """
             }
         }
