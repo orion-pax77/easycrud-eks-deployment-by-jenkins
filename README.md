@@ -478,7 +478,7 @@ docker build -t easycrud1-jenkins:frontend .
 
 ---
 
-## 7️⃣ Push Backend Image to Docker Hub
+## 1️⃣1️⃣ Push Backend Image to Docker Hub
 
 ```bash
 docker push orionpax77/easycrud1-jenkins:frontend
@@ -486,7 +486,7 @@ docker push orionpax77/easycrud1-jenkins:frontend
 
 ---
 
-## 1️⃣1️⃣ Deploy Frontend to EKS 
+## 1️⃣2️⃣ Deploy Frontend to EKS 
 
 ```bash
 kubectl apply -f k8s/frontend-deployment.yaml
