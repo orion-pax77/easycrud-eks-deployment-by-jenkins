@@ -234,6 +234,7 @@ EOF
             }
         }
     }
+    }
 
     post {
         success {
