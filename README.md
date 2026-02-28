@@ -333,7 +333,7 @@ SCM → Git
 ### Repository URL
 
 ```
-https://github.com/orion-pax77/Project.git
+https://github.com/orion-pax77/easycrud-eks-deployment-by-jenkins.git
 ```
 
 ### Branch
