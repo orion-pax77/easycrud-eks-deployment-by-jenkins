@@ -113,7 +113,6 @@ echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
   https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
   /etc/apt/sources.list.d/jenkins.list > /dev/null
 
-sudo apt update
 sudo apt install jenkins -y
 ```
 
@@ -198,13 +197,6 @@ Enter:
 * **AWS Secret Access Key**
 * **Default region** (e.g., `us-east-1`)
 * **Default output format** (`json`)
-
-This creates configuration files in:
-
-```
-~/.aws/credentials
-~/.aws/config
-```
 
 ---
 
